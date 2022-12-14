@@ -4,68 +4,136 @@ import styled from "styled-components";
 import { MapContainer, TileLayer, useMap, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import icon from "./icon";
+import { transformation } from "leaflet";
+import MarkerPosition from "./MarkerPosition";
 
 const TrackingPage = () => {
   const [address, setAddress] = useState(null);
-  const [ipAddress, setIpAdress] = useState("");
+  const [ipAddress, setIpAddress] = useState("");
+
+  const checkIpAddress =
+    /^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$/gi;
+  const checkDomain =
+    /^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+/;
+
+  useEffect(() => {
+    try {
+      const getInitialData = async () => {
+        const res = await fetch(
+          `https://geo.ipify.org/api/v2/country,city?apiKey=${process.env.REACT_APP_API_KEY}&ipAddress=8.8.8.8`
+        );
+        const data = await res.json();
+        setAddress(data);
+      };
+
+      getInitialData();
+    } catch (error) {
+      console.trace(error);
+    }
+  }, []);
+
+  const getEnteredData = async () => {
+    const res = await fetch(
+      `https://geo.ipify.org/api/v2/country,city?apiKey=${
+        process.env.REACT_APP_API_KEY
+      }&${
+        checkIpAddress.test(ipAddress)
+          ? `ipAddress=${ipAddress}`
+          : checkDomain.test(ipAddress)
+          ? `domain=${ipAddress}`
+          : ""
+      }`
+      // https://geo.ipify.org/api/v2/country,city?apiKey=${API_KEY}&ipAddress=8.8.8.8&domain=google.com
+    );
+    const data = await res.json();
+    if (data.code === 400) return;
+
+    setAddress(data);
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    getEnteredData();
+    setIpAddress("");
+  };
+
   return (
     <>
       <Header>
         <h2>IP Address Tracker</h2>
-        <form>
+        <form onSubmit={handleSubmit}>
           <input
             type="text"
             placeholder="Search for any IP address or domain"
+            value={ipAddress}
+            onChange={(e) => setIpAddress(e.target.value)}
           />
           <button type="submit">
             <img src="./images/icon-arrow.svg" alt=">" />
           </button>
         </form>
         <Wrapper>
-          <IPInfo>
-            <div>
-              <h6>IP ADDRESS</h6>
-              <h3>IP ADDRESS</h3>
-            </div>
-            <div>
-              <h6>LOCATION</h6>
-              <h3>IP ADDRESS</h3>
-            </div>
-            <div>
-              <h6>TIMEZONE</h6>
-              <h3>IP ADDRESS</h3>
-            </div>
-            <div>
-              <h6>ISP</h6>
-              <h3>IP ADDRESS</h3>
-            </div>
-          </IPInfo>
+          {address && (
+            <>
+              <IPInfo>
+                <div>
+                  <h6>IP ADDRESS</h6>
+                  <h3>{address.ip}</h3>
+                </div>
+                <div>
+                  <h6>LOCATION</h6>
+                  <h3>
+                    {address.location.city}, {address.location.region}
+                  </h3>
+                </div>
+                <div>
+                  <h6>TIMEZONE</h6>
+                  <h3>UTC {address.location.timezone}</h3>
+                </div>
+                <div>
+                  <h6>ISP</h6>
+                  <h3>{address.isp}</h3>
+                </div>
+              </IPInfo>
+            </>
+          )}
+          {!address && (
+            <IPInfo
+              style={{
+                transform: "translateY(-160px)",
+                paddingBottom: "15px",
+                color: "red",
+              }}
+            >
+              Please Disable Adblocker
+            </IPInfo>
+          )}
         </Wrapper>
       </Header>
-      <Map>
-        <MapContainer
-          center={[51.505, -0.09]}
-          zoom={13}
-          scrollWheelZoom={true}
-          zoomControl={false}
-          style={{
-            height: "500px",
-            width: "100vw",
-            position: "relative",
-            zIndex: "0",
-          }}
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          <Marker position={[51.505, -0.09]} icon={icon}>
-            {/* <Popup>
-              A pretty CSS3 popup. <br /> Easily customizable.
-            </Popup> */}
-          </Marker>
-        </MapContainer>
-      </Map>
+      {address && (
+        <>
+          <Map>
+            <MapContainer
+              center={[address.location.lat, address.location.lng]}
+              zoom={13}
+              scrollWheelZoom={true}
+              zoomControl={false}
+              style={{
+                height: "500px",
+                width: "100vw",
+                position: "relative",
+                zIndex: "0",
+              }}
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              <MarkerPosition address={address} />
+            </MapContainer>
+          </Map>
+        </>
+      )}
     </>
   );
 };
